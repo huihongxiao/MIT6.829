@@ -1,5 +1,7 @@
 # L0-Background: Single-Link Communication
 
+英文原文：[https://ocw.mit.edu/courses/electrical-engineering-and-computer-science/6-829-computer-networks-fall-2002/lecture-notes/L0singlelink.pdf](https://ocw.mit.edu/courses/electrical-engineering-and-computer-science/6-829-computer-networks-fall-2002/lecture-notes/L0singlelink.pdf)
+
 ## Overview
 
 这一篇笔记介绍的是课程背景，对应的内容在课程中不会介绍。在这一篇中，我们会考虑将两台计算机用相同的通讯介质连接起来并尝试在它们之间交换数据时会出现的问题。我们会先从P2P连接开始介绍，在P2P连接中唯一出现的电脑就是线路两端的电脑。之后我们会介绍共享传输介质，例如以太网。这一篇的内容在传统的网络分层的中属于Layer 2，也就是链路层。同时，这篇笔记也会涉及Layer 1，也就是物理层。
@@ -32,10 +34,24 @@ NRZI全称是Non-Return to Zero Inverted。这里发送端在发送bit “0”�
 
 ### 方案3-Manchester编码
 
-Manchester编码中，发送方在发送bit “0”时，会将电平从低变高；发送bit “1”时，会将电平从高变低。这样就确保了每个bit为都有一次电平的变化，使得clock recovery可以实现。虽然它解决了上面提到的NRZ问题，但是它在某种程度上效率比较低（注，速率最高只能按照接收端的内部时钟频率的一半来传输，因为这样接收端才能识别出每个bit的电平变化）。
+Manchester编码中，发送方在发送bit “0”时，会将电平从低变高；发送bit “1”时，会将电平从高变低。这样就确保了每个bit为都有一次电平的变化，使得clock recovery可以实现。虽然它解决了上面提到的NRZ问题，但是它在某种程度上效率比较低（注，速率需要收发双方协商，且最高只能按照接收端的内部时钟频率的一半来传输，因为这样接收端才能识别出每个bit的电平变化）。
 
 ![](<.gitbook/assets/image (4).png>)
 
 ### 方案4-4B/5B
 
-这个方案通过在传输数据中加入额外的bit，来阻止长的连续bit “0”和连续bit “1”，从而解决了Manchester编码低效率的问题。你可以认为它为数据增加了一些冗余，这样clock recovery就容易实现了。具体来说，它将每个连续的4个bit转换成了5个bit，之后通过NRZI将其编码。这样可以确保经过编码之后，不会出现大于等于3个连续的bit “0”（注，4B编码不是简单的在4个数据bit之后增加一个bit，而是将4个数据bit映射成一个最多只有2个连续bit “0”的5bit数，详见[参考](https://erg.abdn.ac.uk/users/gorry/course/phy-pages/4b5b.html)），这样就解决了NRZI的问题。
+这个方案通过在传输数据中加入额外的bit，来阻止长的连续bit “0”和连续bit “1”，从而解决了Manchester编码低效率的问题。你可以认为它为数据增加了一些冗余，这样clock recovery就容易实现了。具体来说，它将每4个连续的数据bit转换成了5个bit，之后通过NRZI将其编码。这样可以确保经过编码之后，不会出现大于等于3个连续的bit “0”（注，4B编码不是简单的在4个数据bit之后增加一个bit，而是将4个数据bit映射成一个最多只有2个连续bit “0”的5bit数，详见[参考](https://erg.abdn.ac.uk/users/gorry/course/phy-pages/4b5b.html)），这样就解决了NRZI的问题。
+
+## 3. Framing
+
+Framing协议的一些例子是PPP（the Point to Point Protocol）和HDLC（High-level Data Link Control）。这里的思路是，发送端通过一个起始标志（HDLC协议中是一个众所周知的8bit 01111110）来区分发送的bit序列，起始标志之间的数据bit被称为一个帧（Frame）。链路层之后会通过上面介绍的一种调制方式，将Frame发送给接收端。在接收端，链路层需要接收这些Frame，并将它们传输给发送端应用程序想要交互的本地应用程序。
+
+简单来看，每个网络协议层都包含三个接口：
+
+1. Peer Interface：与对端进行通讯的接口
+2. Lower-layer interface：在发送端向这个接口发送数据，在接收端从这个接口接收数据
+3. Higher-layer interface：与Lower-layer interface相反
+
+这里的后两个接口通常被称为服务接口（service interface）。
+
+上面提到的分包方式中，有一个问题是起始标志有可能出现在实际传输的数据中。如果不做处理的话，这会使得接收端向更高协议层传输错误的数据。
