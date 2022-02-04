@@ -55,3 +55,45 @@ Circuit Switching在一个负载一致的网络中是有意义的。负载一致
 尽管转发就是在一个数据结构中进行相对简单的查找，难点在于如何如何获取routing table中的条目。这是通过一个使用了路由协议的后台程序完成，这个程序通常以分布式的方式在交换机中实现。理论上和实际中有几种类型的路由协议（某些路由协议只存在于理论中），我们在后面的课程中会学习集中。目前为止，了解到运行路由协议是为了获取网络中每一个目的地址的路由（路径）就足够了。
 
 在datagram网络中实现了这一小节描述功能的switch通常被称为router。使用Internet Protocol（IP）来在互联网上转发和路由packet就是datagram routing的一个例子。
+
+### 3.2 Source routing
+
+在前面的方式中，Switch实现了路由协议将它们的路由表在”纯“datagram网络中散播出去。在发送端也可以实现相同的功能以确定包转发的路径，当实现了这个，网络可以实现source routing，也就是发送端会将交换机的完整顺序（或者是交换机和关联端口的完整顺序）附加在每个packet中。现在每个switch的任务就非常简单了，因为连查表都不需要了。然而，source routing却需要每个发送端都加入到路由协议中以学习网络的拓扑。
+
+基于上面的原因，人们倾向于不会构建只使用source routing的网络，但是很多网络（例如互联网）允许source routing与datagram routing共存。
+
+### 3.3 Virtual circuits
+
+Virtual circuit是一个结合了circuit和packet switching的有趣的转发方式，它既有circuit switching的设置阶段，又有packet switching的特定的header。在设置阶段，源会发送一个特定的singaling message到目的，这个message会经过一系列的交换机最终到达目的。沿途的每个交换机会为每个端口关联一个本地的tag（或者label），并将这个tag设置到singaling message中再发给下个switch。当一个switch在其某个输入端口上收到了singaling message，它首先会决定哪个输出端口可以将这个message送到目的。之后会将输入端口和输入的tag作为key加入到一个本地的table中，key对应的value就是输出端口和对应于输出端口的tag。
+
+在数据传输时，并不会使用packet header中的目的地址，而是会使用tag。现在每个switch的转发任务包含了：tag查找，可以获取输出端口和替换的tag；tag交换，替换packet header中的tag。
+
+之所以要替换tag，是为了避免混淆。如果不替换tag，那么每个源都必须确保任何它使用的tag现在并没有在网络中被其他人使用。
+
+有很多网络技术都使用了Virtual circuit switching，例如Frame Relay和Asynchronous Transfer Mode(ATM)。这些网络中tag的格式和语义各不相同，并且tag的计算方式也不相同。Muti-Protocol Label Switching（MPLS）是一种不依赖链路层的技术（2.5层，在L2和L3之间加tag），switch可以用来实现tag switching。尽管有很多不同，但是所有这些系统的通用原则在上面都介绍了。
+
+Virtual circuit switching的支持者们认为它比datagram routing存在以下优势：
+
+* 它可以确保源和目的之间的路径是固定的，这使得网络管理员可以根据不同的流量模型编排网络。
+* 基于tag的查找比基于datagram header中不同字段查找更有效，目前我们还没有足够的背景理解这一点，但是随着这门课的学习，这一点会更加清晰。
+* 因为有一个独立的设置步骤，对于需要保留网络资源的应用程序，可以使用这个signaling message来保留例如带宽，switch buffer的资源。
+
+这里的观点其实是有争议的：Virtual circuit switching相比datagram routing更加复杂，并且不能天然处理链路或者路由失败。资源保留的原理和机制已经在社区中激烈的讨论了很久，并且会持续很多年！
+
+Virtual circuit技术在互联网基础设施中很常见，并且通常会用来在一个传输网络中连接两个IP router。传输网络可以被看成是链路层，两个router之间的IP packet会在之间传输，例如基于ATM的链路技术。
+
+接下来我们来看一个switching的具体例子，这个例子使用了广泛部署的LAN（local-area network）switching技术。
+
+## 4. 一个例子：LAN Switching
+
+单个共享媒介的网络分区，例如单个Ethernet，受限于它可以支持的终端数量，以及受限于可以在其之上分享的流量。要扩展单个LAN网络分区需要以某种方式将多个LAN网络连接在一起。或许最简单的扩展LAN的方式是通过”LAN Switching“，有时也会被称为”bridging“。Bridges（LAN switches）可以用来扩展单个共享物理媒介。它会查看从一个网络分区来的数据帧，捕获这些数据帧，并转发到一个或者多个其他的网络分区中。我们接下来会在datagram routing的背景下学习这一部分。
+
+另一个学习bridges的原因是，它们是一个自我配置（plug-and-play）的很好的例子。Bridges具备以下特征：
+
+1. 可以在多个端口上接收并转发。每个端口都有个关联的LAN，这个LAN可能又包含了其他的bridge。在这样一个LAN中，汇总的容量不会超过最弱的网络分区的容量，因为在任何一个LAN传输的任何一个packet，都会出现在其他所有的LAN中，这里包括了最慢的那个LAN。
+2. 学习。它们可以学习哪个终端在哪个LAN segment，并更高效的转发packedt。
+3. 生成树（Spanning tree）结构，这样带有环路的bridge拓扑可以避免包风暴。
+
+Bridge是透明的设备---它们完全保留了它们所处理包的完整性，并不会以任何形式改变它们。当然，因为它们的store-and-forward特性，它们可能会为packet增加一些延时并且偶尔丢包，但是从功能上来说它们是透明的。
+
+### 4.1 Learning bridges
