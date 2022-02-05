@@ -138,4 +138,19 @@ Bridge B1和B2配置了连接LAN1和LAN2（这么做的一个原因是为拓扑�
 
 定期发送的configuration message可以处理加入到网络的新bridge和LAN segment。重新生成spanning tree在大多数情况下不会使得整个网络陷入完全的停顿。
 
-以上是基本的算法，但是它并不能在bridge出故障时工作。故障是由定时发送的configuration message缺席来处理的。
+以上是基本的算法，但是它没有处理bridge出故障的状态。故障是由定时发送的configuration message中的时间信息来处理。Bridge会将定时发送的configuration message作为一个”soft state“。如果缺失了从designated bridge或者root发来的configuration message，会触发spanning tree的重新计算。这里”soft state“的概念是一个非常重要的概念，我们在这门课程中会反复看到，并且对于大规模的操作来说是重要的。定期的宣告configuration message来更新网络中的”soft state“可以为一个基于上面算法生成的无环spanning tree拓扑提供最终一致性（eventual consistency）。
+
+### 4.3 Virtual LANs
+
+截止到目前为止，交换网络并不能较好的扩展到大的网络中。这里的原因包括了spanning tree算法的线性扩展特性（网络规模越大，需要计算的节点越多）；以及所有的广播packet都需要送达switch网络中的所有LAN segment的所有节点。Virtual LANs通过将一个交换网络分区成多个独立的虚拟LAN网络来提升扩展性。每个虚拟LAN都被分配了一个”颜色“，packet只有在”颜色“匹配时，才会从一个LAN switch转发到另一个LAN switch。因此，上面提到的算法分别在每中颜色的LAN网络中独立的实现，并且LAN switch的每个端口都被配置成整个系统所有颜色的子集。
+
+## 5. Summary
+
+Switch是一种特殊的计算机，它用来互联单个通讯媒介以形成更大的网络。switching有两种主要的形式：circuit switching和packet switching。packet switching又有多种形式。我们学习了其中一种，switched LAN。
+
+尽管LAN switch可以很好的工作，它们不足以构建一个全球的网络基础设施。这里包含了两个原因：
+
+1. 缺乏扩展性。首先，每个LAN switch都需要在它的forwarding table中维护基于每个主机的信息。其次，偶尔但是又必须的flood不能很好的扩展。
+2. 不能在多种异构链路技术之间工作。一个全球的网络基础设置的一个目标是在各种链路层技术上工作，而不仅仅是以太网。
+
+解决上面提到的挑战并且提供一个全球网络基础设施的问题被称为网络互联的问题（internetworking problem）。我们从下节课开始将学习如何解决这个问题。
