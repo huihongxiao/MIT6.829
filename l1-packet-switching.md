@@ -90,10 +90,52 @@ Virtual circuit技术在互联网基础设施中很常见，并且通常会用�
 
 另一个学习bridges的原因是，它们是一个自我配置（plug-and-play）的很好的例子。Bridges具备以下特征：
 
-1. 可以在多个端口上接收并转发。每个端口都有个关联的LAN，这个LAN可能又包含了其他的bridge。在这样一个LAN中，汇总的容量不会超过最弱的网络分区的容量，因为在任何一个LAN传输的任何一个packet，都会出现在其他所有的LAN中，这里包括了最慢的那个LAN。
+1. 可以在多个端口上混杂的接收并转发。每个端口都有个关联的LAN，这个LAN可能又包含了其他的bridge。在这样一个LAN中，汇总的容量不会超过最弱的网络分区的容量，因为在任何一个LAN传输的任何一个packet，都会出现在其他所有的LAN中，这里包括了最慢的那个LAN。
 2. 学习。它们可以学习哪个终端在哪个LAN segment，并更高效的转发packedt。
 3. 生成树（Spanning tree）结构，这样带有环路的bridge拓扑可以避免包风暴。
 
 Bridge是透明的设备---它们完全保留了它们所处理包的完整性，并不会以任何形式改变它们。当然，因为它们的store-and-forward特性，它们可能会为packet增加一些延时并且偶尔丢包，但是从功能上来说它们是透明的。
 
 ### 4.1 Learning bridges
+
+Learning bridges的基本思想是，bridge学习终端位于自己哪个端口，并构建一个cache来记录。之后当一个发往特定目的（MAC地址）的packet到达bridge时，它就知道该往哪个端口转发。那bridge是如何构建cache的呢？它通过查看它接收到的packet的源地址。如果它没有某个目的地址的记录，它会简单的将packet发送给除了接收到packet的端口之外的其他所有端口。因此，learning bridge维护的状态类似于一个cache，并且只是作为优化（因为没有cache也可以通过flood完成转发，虽然是非常有用的优化。）这里cache的一致性对于正确性来说不是必须的。
+
+除了在网络拓扑中存在环路时，这里的方法可以正确的工作。实际上，在没有环路时，这里的方法不仅可以处理包转发，也可以更新在网络拓扑中移动的节点。如果一个节点移动到交换网络的另一个位置，它第一次发送出数据时，从它到数据的目的地沿途的bridge都会更新cache到node的新位置。实际上，这种方法的一个变种再加上一些优化被用在各种无线局域网中，用来实现链路层的移动性。部署在LCS（不知道什么是LCS）的802.11技术使用了这种方法。
+
+但是当交换网络中存在环路时，会有明显的问题。可以查看图一中的例子，
+
+![](<.gitbook/assets/image (2).png>)
+
+Bridge B1和B2配置了连接LAN1和LAN2（这么做的一个原因是为拓扑增加冗余以提高可靠性）。假设一个packet从S发出，发往了LAN1。因为B1和B2都能看到这个packet，它们都能学到S位于LAN1，并且向它们的cache中添加合适的信息。之后B1和B2都会将packet发送给LAN2。它们会根据CSMA/CD来竞争LAN2上的通信权利，其中一个，假设是B1竞争获胜，会将packet发送给LAN2。当然，这个packet会被B2看见。现在B2看见了重复的packet。但是它又没办法能发现这是一个重复的packet，因为如果逐bit比较的话效率非常低。这就是learning bridge透明存在的直接后果。因此，重复的包会永远循环（因为bridge是透明的，它们没有hop limit或者header中没有TTL）。
+
+但这还不是最糟糕的部分，实际上packet在某些场景下还可以不断的复制。如果我们在两个LAN之间加上第三个bridge B3。现在，每当一个bridge向一个LAN发送一个packet，剩下的两个bridge都会各自向另一个LAN发送一个packet。不难看出这种状态会一直持续，并使得整个系统不可使用。
+
+对于这个问题有几个解决方法，包括了避免形成环路，自动探测环路，和让网络能在环路下工作。明显最后一种方法是更好的方法。这里的诀窍在于从一个bridge拓扑中找到一条无环路的路径。这是通过一个分布式的spanning tree算法来实现的。
+
+### 4.2 解决方法：Spanning Trees
+
+现实中存在很多分布式spanning tree算法。Bridge使用一种基于Dijkstra最短路径的spanning tree算法。这里的想法很简单：bridge选举一个根节点，然后形成到根节点的最短路径。这些最短路径的集合构成的spanning tree就是最终的树。
+
+更具体的来说，问题如下。对于网络中的每一个bridge，确定它的哪个port应该参与到转发数据中，哪个应该保持不活跃的状态，这样最终每个LAN到达root的路径上都有且只有一个bridge与其相连。
+
+将LAN和LAN switch构成的网络看成一个图，并且在这个图上构建spanning tree有点棘手。可以这样构建图，为每一个node关联一个LAN和LAN switch。图中的边从LAN switch开始，连接到它们连接的节点或者其他的LAN switch上。目标是找出构成树的边的子集，这些边还需要覆盖（span）图中的所有节点（这里需要注意的是，部分LAN switch可能不会被覆盖，但是这没问题，因为这些LAN switch是冗余的）。
+
+![](<.gitbook/assets/image (1).png>)
+
+这里的第一个挑战是使用一个分布式的异步的算法，而不是一个中心控制器来完成计算。这里的目标是每个bridge独立的发现自己的哪些端口属于spanning tree，因为它最终需要向这些端口发送packet。最终结果是一个无环的转发拓扑。第二个挑战是处理故障的bridge（例如人工移除bridge或者出bug了）和新增的bridge和LAN segment，而又不中断整个网络。
+
+为了解决第一个问题，每个bridge会定期的向LAN上其他所有的bridge发送configuration message。message包含下列信息：
+
+![](<.gitbook/assets/image (5).png>)
+
+经过一致协商，带有最小unique ID的bridge被选做spanning tree的根节点。每个bridge的configuration message中会包含它认为的根节点的unique ID。这些消息不会被发送到整个LAN，而是只会发送到每个LAN segment。这个消息的目的地址通常对应了一个约定好的链路层地址---ALL-BRIDGES，这个消息只会被LAN segment上的bridge接收并处理。最初的时候，每个bridge都会将自己作为根节点，因为在最初的时候它们自己的unique ID就是它们知道的最小ID。根节点到自己的距离为0。
+
+在任何时间，一个bridge会根据它接收到的最小unique ID和对应的距离来构建自己的信息。距离对应了到达根节点需要经过的bridge端口的数量。bridge会存储接收到这条消息的端口，并将新的根节点发送给它的其他端口，并且将距离加1。如果它在同一个LAN上收到了一个更优的到根节点的消息，那么它不会发出任何消息。这一步有必要，因为这可以确保每个LAN segment只有一个bridge为其转发流量。而这个bridge，被称为这个LAN的designated bridge，并且也是在spanning tree中离根节点最近的bridge。如果有多个bridge到根节点距离相同且都是最近，那么拥有最小unique ID的bridge会被选中。
+
+不难看出这里的方法可以形成一个带有根节点的spanning tree，如果一段时间没有变更。每个bridge只会向被选中作为spanning tree的一部分的端口发送packet。每个bridge需要知道它的”root port“以及连接其他bridge的port。这些port会连接到其他bridge的root port。当两个bridge直接相连，每个bridge都会视另一个bridge为LAN segment。
+
+最终，可以形成一个无环的网络拓扑，这个拓扑以拥有最小ID的bridge作为根节点，其他bridge到根节点都有最短路径。
+
+定期发送的configuration message可以处理加入到网络的新bridge和LAN segment。重新生成spanning tree在大多数情况下不会使得整个网络陷入完全的停顿。
+
+以上是基本的算法，但是它并不能在bridge出故障时工作。故障是由定时发送的configuration message缺席来处理的。
