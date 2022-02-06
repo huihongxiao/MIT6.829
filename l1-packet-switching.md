@@ -138,19 +138,22 @@ Spanning tree算法存在一些挑战，其中第一个是使用一个分布式�
 
 configuration message不会被转发到所有的LAN，而是只会发送到bridge连接的每个LAN segment，并且只被这个LAN segment上的其他bridge接收并处理。它的目的地址通常对应了一个约定好的链路层地址---ALL-BRIDGES。
 
-在任何时间，一个bridge会根据它接收到的最小unique ID和对应的距离来构建自己的信息。距离对应了到达根节点需要经过的bridge端口的数量。bridge会存储接收到这条消息的端口，并将新的根节点发送给它的其他端口，并且将距离加1。如果它在同一个LAN上收到了一个更优的到根节点的消息，那么它不会发出任何消息。这一步有必要，因为这可以确保每个LAN segment只有一个bridge为其转发流量。而这个bridge，被称为这个LAN的designated bridge，并且也是在spanning tree中离根节点最近的bridge。如果有多个bridge到根节点距离相同且都是最近，那么拥有最小unique ID的bridge会被选中。
+在任何时间，一个bridge会根据它接收到的最小unique ID和对应的到根节点的距离来构建自己的信息。到根节点的距离通常对应了到达根节点需要经过的bridge端口的数量。
 
-不难看出这里的方法可以形成一个带有根节点的spanning tree，如果一段时间没有变更。每个bridge只会向被选中作为spanning tree的一部分的端口发送packet。每个bridge需要知道它的”root port“以及连接其他bridge的port。这些port会连接到其他bridge的root port。当两个bridge直接相连，每个bridge都会视另一个bridge为LAN segment。
+* bridge会存储收到了最小unique ID消息的端口作为自己的”root port“（注，也就是通过这个端口可以到达root）。
+* 构建自己的configuration message，其中到根节点的距离等于收到消息中的到根节点距离+1。
+* 将自己的configuration message发送给其他端口。
+  * 如果bridge在一个LAN segment上收到了一个更优的到根节点的信息，那么它不会向这个LAN segment发出任何消息。这一步很有必要，因为这可以确保每个LAN segment只有一个bridge为其转发流量（因为只有一个bridge宣告了最优路径）。而这个bridge，被称为这个LAN segment的designated bridge，并且也是这个LAN segment在spanning tree中离根节点最近的bridge。如果有多个bridge到根节点距离相同且都是最近，那么拥有最小unique ID的bridge会被选中。
 
-最终，可以形成一个无环的网络拓扑，这个拓扑以拥有最小ID的bridge作为根节点，其他bridge到根节点都有最短路径。
+如果不存在网络拓扑的变更，不难看出这里的方法可以形成一个带有根节点的spanning tree。每个bridge只会向位于spanning tree中的端口转发packet。每个bridge需要知道它的”root port“以及连接其他bridge的port，这些port会连接到其他bridge的root port。
 
-定期发送的configuration message可以处理加入到网络的新bridge和LAN segment。重新生成spanning tree在大多数情况下不会使得整个网络陷入完全的停顿。
+最终，这里形成了一个无环的网络拓扑，这个拓扑以拥有最小ID的bridge作为根节点，其他bridge到根节点都有最短路径。定期发送的configuration message可以处理加入到网络的新bridge和LAN segment。重新生成spanning tree在大多数情况下不会使得整个网络陷入完全的停顿。
 
-以上是基本的算法，但是它没有处理bridge出故障的状态。故障是由定时发送的configuration message中的时间信息来处理。Bridge会将定时发送的configuration message作为一个”soft state“。如果缺失了从designated bridge或者root发来的configuration message，会触发spanning tree的重新计算。这里”soft state“的概念是一个非常重要的概念，我们在这门课程中会反复看到，并且对于大规模的操作来说是重要的。定期的宣告configuration message来更新网络中的”soft state“可以为一个基于上面算法生成的无环spanning tree拓扑提供最终一致性（eventual consistency）。
+以上是基本的算法，但是它没有处理bridge出故障的状态。故障是由定时发送的configuration message中的时间信息来处理（注，定时发送本身就包含了时间信息）。Bridge会将定时发送的configuration message作为一个”soft state“。如果缺失了从designated bridge或者root发来的configuration message，则会触发spanning tree的重新计算。这里”soft state“的概念是一个非常重要的概念，我们在这门课程中会反复看到。定期的宣告configuration message来更新网络中的”soft state“可以为一个基于上面算法生成的无环spanning tree拓扑提供最终一致性（eventual consistency）。
 
 ### 4.3 Virtual LANs
 
-截止到目前为止，交换网络并不能较好的扩展到大的网络中。这里的原因包括了spanning tree算法的线性扩展特性（网络规模越大，需要计算的节点越多）；以及所有的广播packet都需要送达switch网络中的所有LAN segment的所有节点。Virtual LANs通过将一个交换网络分区成多个独立的虚拟LAN网络来提升扩展性。每个虚拟LAN都被分配了一个”颜色“，packet只有在”颜色“匹配时，才会从一个LAN switch转发到另一个LAN switch。因此，上面提到的算法分别在每中颜色的LAN网络中独立的实现，并且LAN switch的每个端口都被配置成整个系统所有颜色的子集。
+截止到目前为止，交换网络并具备较好的扩展性。这里的原因包括了spanning tree算法的线性扩展特性（注网络规模越大，需要计算的节点越多，收敛时间越长）；以及所有的广播packet都需要送达网络中的所有LAN segment的所有节点。Virtual LANs通过将一个交换网络分区成多个独立的虚拟LAN网络来提升扩展性。每个虚拟LAN都被分配了一个”颜色“，packet只有在”颜色“匹配时，才会从一个LAN switch转发到另一个LAN switch。因此，上面提到的算法分别在每种颜色的LAN网络中独立的实现，并且LAN switch的每个端口都被配置成整个系统所有颜色的子集（注，这里的颜色就对应了VLAN ID）。
 
 ## 5. Summary
 
@@ -158,7 +161,7 @@ Switch是一种特殊的计算机，它用来互联单个通讯媒介以形成�
 
 尽管LAN switch可以很好的工作，它们不足以构建一个全球的网络基础设施。这里包含了两个原因：
 
-1. 缺乏扩展性。首先，每个LAN switch都需要在它的forwarding table中维护基于每个主机的信息。其次，偶尔但是又必须的flood不能很好的扩展。
-2. 不能在多种异构链路技术之间工作。一个全球的网络基础设置的一个目标是在各种链路层技术上工作，而不仅仅是以太网。
+1. 缺乏扩展性。首先，每个LAN switch都需要在它的forwarding table中维护基于每个主机的信息。其次，偶尔但是必须的flood不能在大规模网络中很好的工作。
+2. 不能在多种异构链路技术之间工作。一个全球的网络基础设施的一个目标是在各种链路层技术上工作，而不仅仅是以太网。
 
 解决上面提到的挑战并且提供一个全球网络基础设施的问题被称为网络互联的问题（internetworking problem）。我们从下节课开始将学习如何解决这个问题。
