@@ -38,95 +38,105 @@ Circuit Switching网络中传输信息通常需要两个阶段：首先是设置
 
 Circuit Switching在一个负载一致的网络中是有意义的。负载一致是指：所有的信息传递会话使用相同的容量，每一次传输都使用一样（或者近乎一样）的比特率。负载一致最有说服力的例子就是电话，并且现在大部分电话网络也是这样设计的（电话网络使用Circuit Switching的另一个原因是历史原因，因为Circuit Switching比Packet Switching要发明的早得多）。
 
-但是，如果负载不一致（不同传输会话使用不同的比特率），Circuit Switching就会浪费链路带宽（因为被逻辑划分出来的N个虚拟通道的带宽是一致的，为了保证传输，虚拟通道的带宽必然要小于最大的传输比特率，对应的小的负载的通道就会造成浪费）。现实中大量的数据传输应用程序具有负载不一致的特征，我们应该使用其他链路复用策略。Packet Switching就是一种通用的提升这种场景性能的方法。
+但是，如果负载不一致（不同传输会话使用不同的比特率），Circuit Switching就会浪费链路带宽（因为被逻辑划分出来的N个虚拟通道的带宽是一致的，为了保证传输，每个虚拟通道的带宽必然要小于最大的传输比特率，对应的小的负载的通道就会造成浪费）。现实中大量的数据传输应用程序具有负载不一致的特征，我们应该使用其他链路复用策略。Packet Switching就是一种通用的提升这种场景性能的方法。
 
 ## 3. Packet Switching
 
-最好的客服上面低效率的方法是允许任意的发送者在任意时间发送数据，同时又允许链路被共享。Packet Switching就是这样一种方法，并且它使用了一种非常简单的思想：为每个frame增加一些特定的额外信息来告诉交换机如何转发自己。这些额外的信息通常被添加在叫做header的地方。Packet Switching有几种不同的形式，区别在于header中的信息以及交换机需要什么样的信息来执行转发。
+最好的克服上面低效率的方法是在链路复用的前提下，允许任意的发送者在任意时间发送数据（这样高负载的应用程序可以占用链路更多时间）。Packet Switching就是这样一种方法，它使用了一种非常简单的思想：为每个frame增加一些特定的额外信息来告诉交换机如何转发frame。frame中包含这些额外信息的地方通常被称为header。
 
-最“直接”的Packet Switching形式时使用数据电报作为分片的单位，并在header中包含目的地址。header中的目的地址唯一的标识了数据的目的地，每个交换机可以用这个目的地完成数据电报的转发。第二种Packet Switching的形式是源路由（source routing），它会在header中包含完整的交换机序列，或者数据电报可以到达目的地的完整的路径信息。现在每个交换机都有一个简单的转发决策，假设数电报的发送端提供了正确的信息。第三种Packet Switching的形式结合了Circuit Switching和Packet Switching，并且使用了一种叫做Virtual Circuit的思想。尽管这种方式包含了Circuit Switching中的设置阶段，因为它使用了header，我们还是将它归类为Packet Switching技术。接下来我们更具体的看这里的每一个技术。
+Packet Switching有几种不同的形式，区别在于header中包含的信息以及交换机需要什么样的信息来执行转发。
+
+* 最“直接”的Packet Switching形式是datagram routing。它会在header中包含目的地址。header中的目的地址唯一的标识了数据的目的地，每个Switch可以用这个目的地址完成datagram的转发。
+* 第二种Packet Switching的形式是源路由（source routing），它会在header中包含转发路径上所有Switch的信息，或者将datagram送达目的地所需要的完整路径信息。相比datagram routing，现在每个Switch的转发决策更加简单，但是这种方法假设datagram的发送端提供了正确的信息。
+* 第三种Packet Switching的形式结合了Circuit Switching和Packet Switching，并且使用了一种叫做Virtual Circuit的思想。尽管这种方式包含了Circuit Switching中的设置阶段，但是因为它使用了header，我们还是将它归类为Packet Switching技术。
 
 ### 3.1 Datagram routing
 
-在Datagram routing中，发送端传输的Datagram会将目的地的底子包含在header中，datagram中通常也会包含发送端的地址，这样接收端可以将信息返回给发送端。Switch的工作就是使用目的地址作为key在一个叫做routing table的数据结构（或者是forwarding table，这两者之间的区别有的时候还挺重要，并且会在课程的后面变得明显）中进行查找，查找的结果就是一个输出端口用来向目的地转发packet。
+在Datagram routing中，发送端传输的datagram会将目的地的地址包含在header中，datagram中通常也会包含发送端的地址，这样接收端可以将对应的信息返回给发送端。Switch的工作就是使用目的地址作为key，在一个叫做routing table的数据结构（或者是forwarding table，这两者之间的区别有的时候还挺重要，在后面的课程会看到他们的区别）中进行查找，查找得到的结果是Switch的一个输出端口，之后Switch会将datagram从这个端口送出，以用来向目的地转发packet（注，这里的frame，datagram，packet都有相同的含义）。
 
-尽管转发就是在一个数据结构中进行相对简单的查找，难点在于如何如何获取routing table中的条目。这是通过一个使用了路由协议的后台程序完成，这个程序通常以分布式的方式在交换机中实现。理论上和实际中有几种类型的路由协议（某些路由协议只存在于理论中），我们在后面的课程中会学习集中。目前为止，了解到运行路由协议是为了获取网络中每一个目的地址的路由（路径）就足够了。
+虽然转发就是在一个数据结构中进行相对简单的查找，但是这里的难点在于如何获取routing table中的条目。通常是通过一个实现了路由协议的后台程序完成，这个程序通常以分布式的方式在所有Switch中实现。理论上和实际中有几种类型的路由协议（某些路由协议只存在于理论中），我们在后面的课程中会学习其中集中。但是目前为止，知道运行路由协议就是为了获取网络中每一个目的地址的路由（路径）就足够了。
 
-在datagram网络中实现了这一小节描述功能的switch通常被称为router。使用Internet Protocol（IP）来在互联网上转发和路由packet就是datagram routing的一个例子。
+在datagram routing中实现了这一小节描述功能的switch通常被称为router。使用Internet Protocol（IP）来在互联网上转发和路由packet就是datagram routing的一个例子。
 
 ### 3.2 Source routing
 
-在前面的方式中，Switch实现了路由协议将它们的路由表在”纯“datagram网络中散播出去。在发送端也可以实现相同的功能以确定包转发的路径，当实现了这个，网络可以实现source routing，也就是发送端会将交换机的完整顺序（或者是交换机和关联端口的完整顺序）附加在每个packet中。现在每个switch的任务就非常简单了，因为连查表都不需要了。然而，source routing却需要每个发送端都加入到路由协议中以学习网络的拓扑。
+在前面的方式中，Switch实现了路由协议将它们的路由表在”纯“datagram网络中宣告出去。其实在发送端也可以实现相同的功能以确定包转发的路径，这就是source routing，也就是发送端会将转发路径上交换机的完整顺序（或者是交换机和关联端口的完整顺序）附加在每个packet中。现在每个switch的任务非常简单，因为连查表都不需要了。然而，source routing却需要每个发送端都加入到路由协议中以学习网络的拓扑（这样发送端才能确定转发路径）。
 
 基于上面的原因，人们倾向于不会构建只使用source routing的网络，但是很多网络（例如互联网）允许source routing与datagram routing共存。
 
 ### 3.3 Virtual circuits
 
-Virtual circuit是一个结合了circuit和packet switching的有趣的转发方式，它既有circuit switching的设置阶段，又有packet switching的特定的header。在设置阶段，源会发送一个特定的singaling message到目的，这个message会经过一系列的交换机最终到达目的。沿途的每个交换机会为每个端口关联一个本地的tag（或者label），并将这个tag设置到singaling message中再发给下个switch。当一个switch在其某个输入端口上收到了singaling message，它首先会决定哪个输出端口可以将这个message送到目的。之后会将输入端口和输入的tag作为key加入到一个本地的table中，key对应的value就是输出端口和对应于输出端口的tag。
+Virtual circuit是一个结合了circuit switching和packet switching的有趣的转发方式，它既有circuit switching的设置阶段，又有packet switching的特定的header。在设置阶段，发送端会发送一个特定的singaling message到目的地，这个message会经过一系列的switch最终到达目的地。沿途的每个交换机会为每个端口关联一个本地的tag（或者label），并将这个tag设置到singaling message中再发给下个switch。具体过程是，当一个switch在其某个输入端口上收到了singaling message，它首先会决定哪个输出端口可以将这个message送到目的地，之后会将输入端口和输入的tag作为key加入到一个本地的table中，key对应的value就是输出端口和对应于输出端口的tag。
 
-在数据传输时，并不会使用packet header中的目的地址，而是会使用tag。现在每个switch的转发任务包含了：tag查找，可以获取输出端口和替换的tag；tag交换，替换packet header中的tag。
+在数据传输时，并不会使用packet header中的目的地址，而是会使用tag。现在每个switch的转发任务包含了：tag查找，以获取输出端口和用来替换的tag；tag交换，替换packet header中的tag。
 
-之所以要替换tag，是为了避免混淆。如果不替换tag，那么每个源都必须确保任何它使用的tag现在并没有在网络中被其他人使用。
+之所以要替换tag，是为了避免混淆。因为如果不替换tag，那么每个源都必须确保任何它使用的tag现在并没有在网络中被其他人使用。
 
-有很多网络技术都使用了Virtual circuit switching，例如Frame Relay和Asynchronous Transfer Mode(ATM)。这些网络中tag的格式和语义各不相同，并且tag的计算方式也不相同。Muti-Protocol Label Switching（MPLS）是一种不依赖链路层的技术（2.5层，在L2和L3之间加tag），switch可以用来实现tag switching。尽管有很多不同，但是所有这些系统的通用原则在上面都介绍了。
+有很多网络技术都使用了Virtual circuit switching，例如Frame Relay和Asynchronous Transfer Mode(ATM)。这些网络中tag的格式和语义各不相同，并且tag的计算方式也不相同。Muti-Protocol Label Switching（MPLS）是一种不依赖链路层的技术（注，MPLS是2.5层技术，在L2和L3之间加tag），switch可以它用来实现tag switching。尽管有很多不同，所有这些系统的基本工作方式都在上面都介绍了。
 
 Virtual circuit switching的支持者们认为它比datagram routing存在以下优势：
 
 * 它可以确保源和目的之间的路径是固定的，这使得网络管理员可以根据不同的流量模型编排网络。
 * 基于tag的查找比基于datagram header中不同字段查找更有效，目前我们还没有足够的背景理解这一点，但是随着这门课的学习，这一点会更加清晰。
-* 因为有一个独立的设置步骤，对于需要保留网络资源的应用程序，可以使用这个signaling message来保留例如带宽，switch buffer的资源。
+* 因为有一个独立的设置步骤，对于需要保留网络资源（例如带宽，switch buffer等）的应用程序，可以使用这个signaling message来预留所需的资源。
 
-这里的观点其实是有争议的：Virtual circuit switching相比datagram routing更加复杂，并且不能天然处理链路或者路由失败。资源保留的原理和机制已经在社区中激烈的讨论了很久，并且会持续很多年！
+但是上面的观点其实是有争议的：Virtual circuit switching相比datagram routing更加复杂，并且默认情况下不能处理链路或者路由失败。资源预留的原理和机制也存在争议，并且已经在社区中激烈的讨论了很久，看情况还会持续很多年！
 
-Virtual circuit技术在互联网基础设施中很常见，并且通常会用来在一个传输网络中连接两个IP router。传输网络可以被看成是链路层，两个router之间的IP packet会在之间传输，例如基于ATM的链路技术。
+Virtual circuit技术在互联网基础设施中很常见，并且通常会用来在一个传输网络中连接两个IP router。传输网络可以被看成是链路层，两个router之间的IP packet会在之间传输，例如基于ATM的链路技术。（注，这里的传输网络就是ISP的骨干网，IP router对应的就是Provider Edge router）
 
 接下来我们来看一个switching的具体例子，这个例子使用了广泛部署的LAN（local-area network）switching技术。
 
 ## 4. 一个例子：LAN Switching
 
-单个共享媒介的网络分区，例如单个Ethernet，受限于它可以支持的终端数量，以及受限于可以在其之上分享的流量。要扩展单个LAN网络分区需要以某种方式将多个LAN网络连接在一起。或许最简单的扩展LAN的方式是通过”LAN Switching“，有时也会被称为”bridging“。Bridges（LAN switches）可以用来扩展单个共享物理媒介。它会查看从一个网络分区来的数据帧，捕获这些数据帧，并转发到一个或者多个其他的网络分区中。我们接下来会在datagram routing的背景下学习这一部分。
+单个共享媒介的network segment，例如单个Ethernet，受限于它可以支持的终端数量，以及受限于可以在其之上共享的流量。要扩展单个LAN segment，需要以某种方式将多个LAN网络连接在一起。或许最简单的扩展LAN的方式是通过”LAN Switching“，有时也会被称为”bridging“。Bridges（也就是LAN switches）可以用来扩展单个共享物理媒介。它会查看从一个network segment来的数据帧，捕获这些数据帧，并转发到一个或者多个其他的网络分区中。我们接下来会在datagram routing的背景下学习这一部分。另一个学习bridges的原因是，它们是一个自我配置（plug-and-play）的很好的例子。
 
-另一个学习bridges的原因是，它们是一个自我配置（plug-and-play）的很好的例子。Bridges具备以下特征：
+Bridges具备以下特征：
 
-1. 可以在多个端口上混杂的接收并转发。每个端口都有个关联的LAN，这个LAN可能又包含了其他的bridge。在这样一个LAN中，汇总的容量不会超过最弱的网络分区的容量，因为在任何一个LAN传输的任何一个packet，都会出现在其他所有的LAN中，这里包括了最慢的那个LAN。
-2. 学习。它们可以学习哪个终端在哪个LAN segment，并更高效的转发packedt。
-3. 生成树（Spanning tree）结构，这样带有环路的bridge拓扑可以避免包风暴。
+1. 在多个端口上混杂的接收并转发数据。每个bridge端口都有个关联的LAN，这个LAN上可能又包含了其他的bridge。在这样一个网络中，总的带宽不会超过其中最弱部分的network segment的带宽，因为在任何一个LAN传输的任何一个packet，都会出现在其他所有的LAN中，包括了最慢的那个LAN（注，这里提到的LAN就是一个独立的network segment，可以理解为一根链路，bridge的端口连接到这些链路上）。
+2. 学习。它们可以学习哪个终端在哪个LAN segment，并更高效的转发packet。
+3. 可以实现生成树（Spanning tree）结构，这样带有环路的网络拓扑可以避免网络风暴。
 
-Bridge是透明的设备---它们完全保留了它们所处理包的完整性，并不会以任何形式改变它们。当然，因为它们的store-and-forward特性，它们可能会为packet增加一些延时并且偶尔丢包，但是从功能上来说它们是透明的。
+Bridge是透明的设备---它们完全保留了它们所处理包的完整性，并且不会以任何形式改变它们。当然，因为它们的store-and-forward特性，它们可能会为packet增加一些延时并且偶尔丢包，但是从功能上来说它们是透明的。
 
 ### 4.1 Learning bridges
 
-Learning bridges的基本思想是，bridge学习终端位于自己哪个端口，并构建一个cache来记录。之后当一个发往特定目的（MAC地址）的packet到达bridge时，它就知道该往哪个端口转发。那bridge是如何构建cache的呢？它通过查看它接收到的packet的源地址。如果它没有某个目的地址的记录，它会简单的将packet发送给除了接收到packet的端口之外的其他所有端口。因此，learning bridge维护的状态类似于一个cache，并且只是作为优化（因为没有cache也可以通过flood完成转发，虽然是非常有用的优化。）这里cache的一致性对于正确性来说不是必须的。
+Learning bridges的基本思想是，bridge学习终端位于自己哪个端口，并构建一个cache来记录这个信息。之后当一个发往特定目的地址（例如MAC地址）的packet到达bridge时，它就知道该往哪个端口转发。那bridge是如何构建cache的呢？它是通过查看它接收到的packet的源地址（注，也就是记录接收端口和源地址的关系）。
 
-除了在网络拓扑中存在环路时，这里的方法可以正确的工作。实际上，在没有环路时，这里的方法不仅可以处理包转发，也可以更新在网络拓扑中移动的节点。如果一个节点移动到交换网络的另一个位置，它第一次发送出数据时，从它到数据的目的地沿途的bridge都会更新cache到node的新位置。实际上，这种方法的一个变种再加上一些优化被用在各种无线局域网中，用来实现链路层的移动性。部署在LCS（不知道什么是LCS）的802.11技术使用了这种方法。
+如果bridge的cache中没有某个目的地址的记录，它会简单的将packet发送给除了接收端口之外的其他所有端口。因此，learning bridge维护的状态类似于一个cache，这个cache可以优化转发，并且cache的一致性对于正确性来说不是必须的（因为没有cache也可以通过flood完成转发）。
 
-但是当交换网络中存在环路时，会有明显的问题。可以查看图一中的例子，
+如果在网络拓扑中不存在环路，这里的方法可以正确的工作。实际上，在没有环路时，这里的方法不仅可以处理包转发，也可以更新在网络拓扑中移动的节点。如果一个节点移动到网络的另一个位置，它第一次发送出数据时，从它到数据的目的地沿途的bridge都会将cache更新到node的新位置。实际上，这种方法的一个变种再加上一些优化被用在各种无线局域网中用来实现链路层的移动性。
+
+但是当交换网络中存在环路时，会有明显的问题。可以查看下图中的例子，
 
 ![](<.gitbook/assets/image (2).png>)
 
-Bridge B1和B2配置了连接LAN1和LAN2（这么做的一个原因是为拓扑增加冗余以提高可靠性）。假设一个packet从S发出，发往了LAN1。因为B1和B2都能看到这个packet，它们都能学到S位于LAN1，并且向它们的cache中添加合适的信息。之后B1和B2都会将packet发送给LAN2。它们会根据CSMA/CD来竞争LAN2上的通信权利，其中一个，假设是B1竞争获胜，会将packet发送给LAN2。当然，这个packet会被B2看见。现在B2看见了重复的packet。但是它又没办法能发现这是一个重复的packet，因为如果逐bit比较的话效率非常低。这就是learning bridge透明存在的直接后果。因此，重复的包会永远循环（因为bridge是透明的，它们没有hop limit或者header中没有TTL）。
+Bridge B1和B2同时连接LAN1和LAN2（这么做的一个原因是为拓扑增加冗余以提高可靠性）。假设一个packet从S发出，发往了LAN1。因为B1和B2都能看到这个packet，它们都能学到S位于LAN1，并且向它们的cache中添加合适的信息。之后B1和B2都会将packet发送给LAN2，但是它们会根据CSMA/CD来竞争LAN2上的通信权利，假设是B1竞争获胜，会将packet发送给LAN2。当然，这个packet也会被B2看见。现在B2看见了重复的packet，但是它又没办法发现这是一个重复的packet，因为如果每个包都逐bit比较的话，转发效率会非常低。因为learning bridge透明特性，bridge不会修改packet的任何字段（不像router会更新header中的hop limit或者TTL），所以重复的包会永远循环下去。
 
-但这还不是最糟糕的部分，实际上packet在某些场景下还可以不断的复制。如果我们在两个LAN之间加上第三个bridge B3。现在，每当一个bridge向一个LAN发送一个packet，剩下的两个bridge都会各自向另一个LAN发送一个packet。不难看出这种状态会一直持续，并使得整个系统不可使用。
+但这还不是最糟糕的部分，实际上packet在某些场景下还可以不断的复制。如果我们在两个LAN之间加上第三个bridge B3。现在，每当一个bridge向一个LAN发送一个packet，剩下的两个bridge都会收到相同的packet，并且各自向另一个LAN发送这个packet（packet数量加倍了）。不难看出这种状态会一直持续，最终使得整个网络不可使用。
 
-对于这个问题有几个解决方法，包括了避免形成环路，自动探测环路，和让网络能在环路下工作。明显最后一种方法是更好的方法。这里的诀窍在于从一个bridge拓扑中找到一条无环路的路径。这是通过一个分布式的spanning tree算法来实现的。
+对于这个问题有几个解决方法，包括：构造网络时避免形成环路；自动探测环路；和让网络能在有环路的情况下也能工作。明显最后一种方法是更好的方法，它的诀窍在于从一个bridge网络拓扑中找到一条无环路的路径。这是通过一个分布式的spanning tree算法来实现的。
 
 ### 4.2 解决方法：Spanning Trees
 
-现实中存在很多分布式spanning tree算法。Bridge使用一种基于Dijkstra最短路径的spanning tree算法。这里的想法很简单：bridge选举一个根节点，然后形成到根节点的最短路径。这些最短路径的集合构成的spanning tree就是最终的树。
+现实中存在很多分布式spanning tree算法。Bridge使用一种基于Dijkstra最短路径的spanning tree算法。这里的想法很简单：所有bridge选举一个根节点，然后每个bridge形成到根节点的最短路径。这些最短路径的集合构成的spanning tree就是最终的树。
 
-更具体的来说，问题如下。对于网络中的每一个bridge，确定它的哪个port应该参与到转发数据中，哪个应该保持不活跃的状态，这样最终每个LAN到达root的路径上都有且只有一个bridge与其相连。
+更具体的来说：对于网络中的每一个bridge，确定它的哪个port应该参与到数据转发中，哪个应该保持不活跃的状态，这样最终每个LAN segment在到达root的路径上都有且只有一个bridge与其直接相连（注，spanning tree算法就是将网络中的冗余去除，以避免环路。去除冗余的方法就是关闭某些bridge的某些端口）。
 
-将LAN和LAN switch构成的网络看成一个图，并且在这个图上构建spanning tree有点棘手。可以这样构建图，为每一个node关联一个LAN和LAN switch。图中的边从LAN switch开始，连接到它们连接的节点或者其他的LAN switch上。目标是找出构成树的边的子集，这些边还需要覆盖（span）图中的所有节点（这里需要注意的是，部分LAN switch可能不会被覆盖，但是这没问题，因为这些LAN switch是冗余的）。
+首先需要将LAN segment和Bridge构成的网络看成一个图，之后才能在这个图上构建spanning tree，但是构建这么一个图比较麻烦。可以这么来构建，将LAN segment和bridge看成图中的点，图中的边连接了bridge和LAN segment。spanning tree的目标是找出所有边的子集以构成树，这些边还需要覆盖（span）图中的所有节点（这里需要注意的是，部分bridge可能不会被覆盖，但是这没问题，因为这些bridge是冗余的）。
 
 ![](<.gitbook/assets/image (1).png>)
 
-这里的第一个挑战是使用一个分布式的异步的算法，而不是一个中心控制器来完成计算。这里的目标是每个bridge独立的发现自己的哪些端口属于spanning tree，因为它最终需要向这些端口发送packet。最终结果是一个无环的转发拓扑。第二个挑战是处理故障的bridge（例如人工移除bridge或者出bug了）和新增的bridge和LAN segment，而又不中断整个网络。
+Spanning tree算法存在一些挑战，其中第一个是使用一个分布式的异步的算法，而不是一个中心控制器来完成计算。这里的目标是每个bridge独立的发现自己的哪些端口属于spanning tree，因为它最终需要向这些端口发送packet。最终结果是一个无环的转发拓扑。第二个挑战是处理故障的bridge（例如人工移除bridge或者出bug了）和新增的bridge和LAN segment，而又不中断整个网络。
 
 为了解决第一个问题，每个bridge会定期的向LAN上其他所有的bridge发送configuration message。message包含下列信息：
 
 ![](<.gitbook/assets/image (5).png>)
 
-经过一致协商，带有最小unique ID的bridge被选做spanning tree的根节点。每个bridge的configuration message中会包含它认为的根节点的unique ID。这些消息不会被发送到整个LAN，而是只会发送到每个LAN segment。这个消息的目的地址通常对应了一个约定好的链路层地址---ALL-BRIDGES，这个消息只会被LAN segment上的bridge接收并处理。最初的时候，每个bridge都会将自己作为根节点，因为在最初的时候它们自己的unique ID就是它们知道的最小ID。根节点到自己的距离为0。
+* 每个bridge都有一个属于自己的unique ID，它除了标识bridge，最小unique ID的bridge会被选做spanning tree的根节点。
+* bridge's idea of root 包含了当前bridge所知道的根节点的unique ID。最初的时候，每个bridge都会将自己作为根节点，因为在最初的时候它们自己的unique ID就是它们知道的最小ID。
+* distance to root 是当前bridge到其所知道的根节点的距离。这个距离可以用在Dijkstra算法中。根节点到自己的距离为0。
+
+configuration message不会被转发到所有的LAN，而是只会发送到bridge连接的每个LAN segment，并且只被这个LAN segment上的其他bridge接收并处理。它的目的地址通常对应了一个约定好的链路层地址---ALL-BRIDGES。
 
 在任何时间，一个bridge会根据它接收到的最小unique ID和对应的距离来构建自己的信息。距离对应了到达根节点需要经过的bridge端口的数量。bridge会存储接收到这条消息的端口，并将新的根节点发送给它的其他端口，并且将距离加1。如果它在同一个LAN上收到了一个更优的到根节点的消息，那么它不会发出任何消息。这一步有必要，因为这可以确保每个LAN segment只有一个bridge为其转发流量。而这个bridge，被称为这个LAN的designated bridge，并且也是在spanning tree中离根节点最近的bridge。如果有多个bridge到根节点距离相同且都是最近，那么拥有最小unique ID的bridge会被选中。
 
