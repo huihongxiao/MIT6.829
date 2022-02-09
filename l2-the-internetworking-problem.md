@@ -179,8 +179,40 @@ TCP的ACK是累积的，举个例子下面的字节序列：
 
 在接收端会触发接收端在收到每个datagram时回复下面的ACK：
 
-![这个图应该错了，正确的ACK序列应该是1001 1701 3001 4001 4577](<.gitbook/assets/image (6).png>)
+**1001           1701           3001           4001           4577**
 
 每个ACK都会确认，目前为止在序列中收到的所有字节数（注，比如第二个ACK确认了1700个字节），并告诉发送端自己期望收到的下一个字节数（注，所以ACK的是1700 + 1 = 1701）。
 
-每个TCP的ACK中都会包含一个接收端的窗口，以告诉发送端当前自己的socket buffer中还有多少可用的空间。这在端到端的流控（flow-control）中是有用的。
+每个TCP的ACK中都会包含一个接收端的窗口，以告诉发送端当前自己的socket buffer中还有多少可用的空间。这在端到端的流控（flow-control）中是有用的。但是这个不用跟TCP的拥塞控制（congestion control）弄混了，拥塞控制是处理网络中带宽资源竞争的方式。流控只会确保发送端在任何时候都不会使得接收端过载（你会看到流控比拥塞控制简单的多）。
+
+当丢包时，TCP有两种形式的重传：时间驱动（timer-driven）重传和数据驱动（data-driven）重传。前者依赖预估一个连接的RTT（round-trip time）来是设置一个超时时间，如果ACK在发送TCP segment之后经过超时时间还没收到，那么这个TCP segment会重传。后者依赖丢包之后的 其他数据能够成功的被接收到，进而让接收端触发一个packet recovery，而不用等待超时时间。
+
+### 4.3 TCP的定时器们
+
+为了完成重传，发送端需要知道什么时候发生了丢包。如果发送端经过一段时间没有收到ACK，它会假设packet丢失了并且重传packet。现在的问题是发送端究竟要等多久？
+
+这里的超时时间依赖什么因素呢？很明显，它应该依赖TCP连接的RTT。所以发送端需要预估RTT，它是通过监控发送一个packet和收到ACK的时间差来获取数据。它会获取多个时间差并求平均。这里有很多中方法，TCP选用的是一种叫做EWMA（Exponential Weighted Moving Average）的简单方法。这个方法如下计算：
+
+$$
+srtt = a * r + (1-a)srtt
+$$
+
+这里r是当前采样的时间差，srtt是预估的RTT。为了计算更高效，a=1/8，因为这样可以通过bit移位来完成计算。
+
+我们现在知道如何获取RTT，那如何用RTT来设置重传超时呢？（RTO: retransmission timeout）一种古老的办法是让RTO等于RTT的倍数，例如等于RTT的2倍。实际上，原始的TCP规范RFC793里面用的就是这种方法。不幸的是，这种简单的方法并不能避免虚假重传（Spurious retransmissions）。虚假重传是指packet还在传输的过程中，但是却被发送端认为已经丢失。这可能会导致网络拥塞，因为健壮性原则中的[保守发送](l2-the-internetworking-problem.md#jian-zhuang-xing-yuan-ze)被打破了。
+
+简单的修复方法是使得RTO等于平均值和标准方差的函数，这样可以使得虚假重传的可能性大大降低。
+
+$$
+RTO = srtt + 4 * rttvar
+$$
+
+rttvar是RTT的平均线性偏差，它按照如下方式计算
+
+$$
+rttvar = y * dev + (1-y) * rttvar
+$$
+
+其中dev = |r-srtt|， y = 1/4。
+
+问题还没完。TCP还有retransmission ambiguity的问题。当一个被重传了packet的ACK被收到时，发送端怎么计算RTT，使用最初的packet的时间还是用重传packet的时间？这看起来似乎微不足道，但是实际上很严重，因为RTT的预估可以变得毫无意义，并且会影响到吞吐。这个问题的解决方法也很简单，计算RTT时直接忽略有重传的packet。
