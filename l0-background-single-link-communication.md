@@ -36,7 +36,7 @@ NRZI全称是Non-Return to Zero Inverted。这里发送端在发送bit “0”�
 
 Manchester编码中，发送方在发送bit “0”时，会将电平从低变高；发送bit “1”时，会将电平从高变低。这样就确保了每个bit位都有一次电平的变化，从而使得clock recovery可以实现。虽然它解决了上面提到的NRZ问题，但是它在某种程度上效率比较低（注，因为首先速率需要收发双方协商，其次最高只能按照接收端的内部时钟频率的一半来传输，这样接收端才能识别出每个bit的电平变化）。
 
-![](<.gitbook/assets/image (4) (1).png>)
+![](<.gitbook/assets/image (4) (1) (1).png>)
 
 ### 方案4-4B/5B
 
