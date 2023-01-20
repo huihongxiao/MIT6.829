@@ -133,7 +133,7 @@ CIDR可以优化通用的场景。通常来说，大部分组织需要使用最�
 
 不同的网络并不总是有相同的MTU（Maximum Transmission Unit）。当一个网关（注，也就是常见的router）收到一个packet，并且需要转发到一个有着更小MTU，且MTU小于packet大小的网络时，它有以下选择：
 
-1. 将packet丢弃。实际上，如果发送端在IP header中能设置了不能分片，IP协议规定就是丢弃packet。丢包之后，网盖帽会向发送端发送一个基于ICMP协议的错误消息。
+1. 将packet丢弃。实际上，如果发送端在IP header中能设置了不能分片，IP协议规定就是丢弃packet。丢包之后，网关会向发送端发送一个基于ICMP协议的错误消息。
 2. 将packet分片。IPv4的默认行为是会将packet分片到MTU大小，并将每个分片发送到目的端。在IP header中包含了packet ID和offset，这样接收端可以根据这些信息重新组装分片。
 
 ### 3.3 Time-to-live（TTL）
@@ -142,7 +142,7 @@ CIDR可以优化通用的场景。通常来说，大部分组织需要使用最�
 
 ### 3.4 Type-of-service（TOS）
 
-IP header中有8bit的TOS字段，router可以根据这个字段来区别对待packet。TOS现在并没有很多实用了，不过我们之后会看到DSCP是如何使用这个字段。
+IP header中有8bit的TOS字段，router可以根据这个字段来区别对待packet。TOS现在并没有很多应用，不过我们之后会看到DSCP是如何使用这个字段。
 
 ### 3.5 Protocol
 
@@ -154,7 +154,7 @@ IP header中有8bit的TOS字段，router可以根据这个字段来区别对待p
 
 ### 3.7 IP options
 
-IP协议使得节点可以在header中增加option。虽然有各种option被定义了，但是鲜有人用，即使有些option是真的有用的。因为在快速路径处理IP option对于高速router来说是个代价很高的操作。虽然大多数的IP option是为了让终端主机使用，但是IPv4协议强制了所有的router也要处理所有的option，即使router需要做的只是忽略它们。如果考虑到IP option，最终会使得router变得很慢，所以这导致了option不被人使用。
+IP协议使得节点可以在header中增加option。虽然有各种option被定义了并且有些option是真的有用，但是鲜有人使用IP option，因为在快速路径处理IP option对于高速router来说是个代价很高的操作。虽然大多数的IP option是为了让终端主机使用，但是IPv4协议强制了所有的router也要处理所有的option，即使router需要做的只是忽略它们。如果考虑到IP option，最终会使得router变得很慢，所以这导致了option不被人使用。
 
 现在的工程实践是避免使用option，并且router有时会查看传输层header（例如TCP/UDP 端口号，基于5元组的各种算法都需要用到传出层端口号），这些传输层字段都在固定的位置，只需要很少的解析，但是加上IP option之后情况会变得复杂。
 
