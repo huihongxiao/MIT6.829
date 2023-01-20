@@ -209,7 +209,7 @@ $$
 
 这里r是当前采样的时间差，srtt是预估的RTT。为了计算更高效，a=1/8，因为这样可以通过bit移位来完成计算。
 
-我们现在知道如何获取RTT，那如何用RTT来设置重传超时（RTO: retransmission timeout）呢？一种古老的办法是让RTO等于RTT的倍数，例如等于RTT的2倍。实际上，原始的TCP规范RFC793里面用的就是这种方法。不幸的是，这种简单的方法并不能避免虚假重传（Spurious retransmissions）。虚假重传是指packet还在传输的过程中，但是却被发送端认为已经丢失。虚假重传可能会导致网络拥塞，因为健壮性原则中的[保守发送](l2-the-internetworking-problem.md#jian-zhuang-xing-yuan-ze)被打破了（注，设想这样一个场景，网络从正常变得拥塞，但是之前计算的RTT还没有来得及更新，因为新的时间差只占1/8。网络拥塞会使得很多包没有丢失，只是变得延时增加了，但发送端还不知道，触发了重传并且向这个拥塞的网络发送了更多的包，进而家中了网络拥塞）。
+我们现在知道如何获取RTT，那如何用RTT来设置重传超时（RTO: retransmission timeout）呢？一种古老的办法是让RTO等于RTT的倍数，例如等于RTT的2倍。实际上，原始的TCP规范RFC793里面用的就是这种方法。不幸的是，这种简单的方法并不能避免虚假重传（Spurious retransmissions）。虚假重传是指packet还在传输的过程中，但是却被发送端认为已经丢失。虚假重传可能会导致网络拥塞，因为健壮性原则中的[保守发送](l2-the-internetworking-problem.md#jian-zhuang-xing-yuan-ze)被打破了（注，设想这样一个场景，网络从正常变得拥塞，但是之前计算的RTT还没有来得及更新，因为新的时间差只占1/8。网络拥塞会使得很多包没有丢失，只是变得延时增加了，但发送端还不知道，触发了重传并且向这个拥塞的网络发送了更多的包，进而加重了网络拥塞）。
 
 简单的修复方法是使得RTO等于平均值和标准方差的函数，这样可以使得虚假重传的可能性大大降低。
 
@@ -225,7 +225,7 @@ $$
 
 其中dev = |r-srtt|， y = 1/4。
 
-问题还没完。TCP还有retransmission ambiguity的问题。当一个被重传了packet的ACK被收到时，发送端怎么计算RTT，使用最初的packet的时间还是用重传packet的时间？这看起来似乎微不足道，但是实际上很重要，因为如果选错了RTT的预估将变得毫无意义，并且会影响到网络的吞吐。这个问题的解决方法也很简单，计算RTT时直接忽略有重传的packet。
+问题还没完。TCP还有retransmission ambiguity的问题。当一个被重传了packet的ACK被收到时，发送端怎么计算RTT，使用最初的packet的时间还是用重传packet的时间？这看起来似乎微不足道，但是实际上很重要，因为如果选错了RTT将使得预估变得毫无意义，并且会影响到网络的吞吐。这个问题的解决方法也很简单，计算RTT时直接忽略有重传的packet。
 
 现代的避免retransmission ambiguity的方法是使用TCP的timestamp option。大部分好的TCP实现都遵从了RFC1323的建议，使用了timestamp option。在这个option中，发送端用8个字节（4个字节记录秒，4个字节记录微秒）来记录当前TCP segment的时间。接收端，会在ACK中，直接返回对应的timestamp option中的值。发送端在接收到ACK之后，可以用当前时间减去ACK中的时间以获取时间差，所以现在是否发生了重传并不重要。
 
