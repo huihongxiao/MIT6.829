@@ -39,5 +39,5 @@
 
 #### 1.2.2 Solution 1: CIDR
 
-对于这个问题的解决方式之一就是摆脱class-based addressing以及转发路径上对应的固定长度区域查找。IETF设计了一种方法叫做：Classless Inter-Domain Routing(简称CIDR，发音cider)。
+对于这个问题的解决方式之一就是摆脱class-based addressing以及转发路径上对应的固定长度区域查找。IETF设计了一种方法叫做：Classless Inter-Domain Routing(简称CIDR，发音cider)。在这种方法中，每一个网络通过两个字段确定一段地址空间：A，一个32bit的数字（通常用十进制和点表示）表明地址空间；m，一个介于1和32之间的数字表明地址空间大小。如果一个网络的地址空间是A/m，那表示它有2^m个地址，所有地址的前32-m个bit都是A。例如，18.31/16表示这里有2^16个地址，地址空间是\[18.31.0.0, 18.31.255.255]
 
